@@ -1,0 +1,1138 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pondicherry Tourist Guide Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+html, body {
+margin:0;
+height:100%;
+overflow:hidden;
+font-family:Arial;
+}
+
+#container {
+display:flex;
+height:100%;
+width:100%;
+}
+
+#sidebar {
+width:420px;
+min-width:220px;
+max-width:70%;
+overflow-y:auto;
+background:white;
+padding:15px;
+box-sizing:border-box;
+border-right:1px solid #ccc;
+transition:width 0.25s ease;
+}
+
+#sidebar.collapsed {
+width:0;
+padding:0;
+border:none;
+overflow:hidden;
+}
+
+
+#collapseBtn {
+position:absolute;
+top:10px;
+left:10px;
+z-index:1000;
+background:white;
+border:1px solid #ccc;
+padding:6px 10px;
+cursor:pointer;
+border-radius:4px;
+font-size:14px;
+box-shadow:0 1px 4px rgba(0,0,0,0.2);
+}
+
+
+#resizer {
+width:6px;
+background:#ddd;
+cursor:col-resize;
+}
+
+#map {
+flex:1;
+height:100%;
+}
+
+.place {
+cursor:pointer;
+padding:8px;
+border-bottom:1px solid #eee;
+}
+
+.preview {
+display:-webkit-box;
+-webkit-line-clamp:2;
+-webkit-box-orient:vertical;
+overflow:hidden;
+font-size:13px;
+color:#555;
+}
+
+.filters button {
+margin:4px;
+padding:6px 10px;
+cursor:pointer;
+}
+
+#sidebar{
+transition: width 0.18s ease;
+}
+#map{
+transition: all 0.18s ease;
+}
+
+
+
+.marker-icon{
+display:flex;
+align-items:center;
+justify-content:center;
+width:26px;
+height:26px;
+border-radius:50%;
+color:white;
+font-size:15px;
+font-weight:bold;
+box-shadow:0 1px 4px rgba(0,0,0,0.35);
+}
+
+font-size:20px;
+text-align:center;
+}
+
+/* --- Sea gradient overlay --- */
+#seaGradient{
+position:absolute;
+right:0;
+top:0;
+width:45%;
+height:100%;
+background:linear-gradient(
+to right,
+rgba(255,255,255,0) 0%,
+rgba(255,255,255,0.55) 40%,
+rgba(255,255,255,0.85) 100%
+);
+pointer-events:none;
+z-index:700;
+}
+
+/* --- Intro panel (blank content) --- */
+#mapIntroPanel{
+position:absolute;
+top:130px;
+right:80px;
+width:420px;
+padding:22px 26px;
+background:rgba(255,255,255,0.78);
+border-radius:8px;
+box-shadow:0 4px 14px rgba(0,0,0,0.15);
+z-index:900;
+font-family:Georgia, serif;
+}
+
+#mapIntroPanel h1{
+font-size:34px;
+margin:0 0 10px 0;
+color:#222;
+}
+
+#mapIntroPanel p{
+font-size:15px;
+line-height:1.6;
+color:#555;
+margin:0;
+}
+
+
+/* Smooth fade animation for intro panel */
+#mapIntroPanel{
+transition: opacity 0.5s ease, transform 0.5s ease;
+opacity:1;
+transform:translateY(0px);
+}
+#mapIntroPanel.hidden{
+opacity:0;
+transform:translateY(10px);
+pointer-events:none;
+}
+
+
+/* smooth map transitions */
+.leaflet-container{
+transition: transform 0.4s ease;
+}
+
+
+/* subtle edge shadow between map and sea gradient */
+#seaGradient::before{
+content:'';
+position:absolute;
+left:-20px;
+top:0;
+width:20px;
+height:100%;
+background:linear-gradient(
+to left,
+rgba(0,0,0,0.12),
+rgba(0,0,0,0)
+);
+pointer-events:none;
+}
+
+
+/* glass blur effect behind intro panel */
+#mapIntroPanel{
+backdrop-filter: blur(6px);
+-webkit-backdrop-filter: blur(6px);
+background: rgba(255,255,255,0.65);
+}
+
+
+/* subtle animated shimmer in sea gradient */
+@keyframes seaShimmer {
+  0% {opacity:0.92;}
+  50% {opacity:1;}
+  100% {opacity:0.92;}
+}
+
+#seaGradient{
+animation: seaShimmer 8s ease-in-out infinite;
+}
+
+
+/* subtle parallax effect between map movement and sea gradient */
+#seaGradient{
+will-change: transform;
+}
+
+
+/* subtle vignette around map edges to focus center */
+#mapVignette{
+position:absolute;
+top:0;
+left:0;
+width:100%;
+height:100%;
+pointer-events:none;
+background:radial-gradient(
+circle at center,
+rgba(0,0,0,0) 60%,
+rgba(0,0,0,0.08) 85%,
+rgba(0,0,0,0.15) 100%
+);
+z-index:650;
+}
+
+
+/* smoother easing when panel returns after filters */
+#mapIntroPanel{
+transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1), 
+            transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+
+/* Sidebar hover highlight */
+.place:hover{
+background: rgba(0,0,0,0.06);
+transition: background 0.2s ease;
+cursor:pointer;
+}
+
+
+
+
+
+/* Make sidebar layout fixed header + scroll list */
+#sidebar{
+display:flex;
+flex-direction:column;
+height:100%;
+}
+
+#filters{
+flex:0 0 auto;
+background:white;
+padding-bottom:10px;
+border-bottom:1px solid #e5e5e5;
+}
+
+#listContainer{
+flex:1 1 auto;
+overflow-y:auto;
+padding-right:4px;
+}
+
+
+/* dynamic divider when scrolling */
+.filters.scrolled{
+box-shadow:0 3px 8px rgba(0,0,0,0.15);
+}
+
+
+/* Reset view button */
+#resetViewBtn{
+position:absolute;
+bottom:30px;
+right:20px;
+z-index:1000;
+background:white;
+border-radius:6px;
+padding:8px 12px;
+box-shadow:0 2px 8px rgba(0,0,0,0.2);
+font-size:13px;
+cursor:pointer;
+}
+#resetViewBtn:hover{
+background:#f2f2f2;
+}
+
+
+
+/* Glow ring highlight for active marker */
+.marker-active{
+transform: scale(1.25);
+box-shadow: 0 0 0 6px rgba(255,255,255,0.9),
+            0 0 14px rgba(0,0,0,0.45);
+z-index:1000 !important;
+}
+
+
+
+/* pulse + glow for active marker */
+.marker-active{
+transform: scale(1.25);
+filter: drop-shadow(0 0 6px rgba(0,0,0,0.45));
+z-index:1000 !important;
+}
+
+@keyframes markerPulse{
+0% { transform: scale(1); }
+40% { transform: scale(1.45); }
+100% { transform: scale(1.25); }
+}
+
+.marker-ripple{
+animation: markerPulse 0.45s ease;
+}
+
+/* smoother glow appearance */
+.leaflet-marker-icon{
+transition: transform 0.25s ease, filter 0.25s ease;
+}
+
+
+/* ripple highlight effect */
+@keyframes markerRipple{
+0% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(0,0,0,0)); }
+50% { transform: scale(1.5); filter: drop-shadow(0 0 10px rgba(0,0,0,0.5)); }
+100% { transform: scale(1.25); filter: drop-shadow(0 0 6px rgba(0,0,0,0.45)); }
+}
+
+.marker-ripple{
+animation: markerRipple 0.45s ease;
+}
+
+
+/* dim non‑selected markers */
+.marker-dim{
+opacity:0.35;
+transition: opacity 0.25s ease;
+}
+
+
+/* brief map dim effect */
+@keyframes mapDimFlash{
+0% { opacity:1; }
+50% { opacity:0.75; }
+100% { opacity:1; }
+}
+
+.map-dim-flash{
+animation: mapDimFlash 0.25s ease;
+}
+
+
+/* popup fade-in animation */
+@keyframes popupFadeIn{
+0% { opacity:0; transform: translateY(6px); }
+100% { opacity:1; transform: translateY(0); }
+}
+
+.leaflet-popup{
+animation: popupFadeIn 0.25s ease;
+}
+
+
+/* popup close button hover animation */
+.leaflet-popup-close-button{
+transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.leaflet-popup-close-button:hover{
+transform: scale(1.25) rotate(90deg);
+color:#c24e2a;
+}
+
+
+/* improve popup readability */
+.leaflet-popup-content-wrapper{
+max-width:320px;
+}
+
+.leaflet-popup-content{
+line-height:1.6;
+font-size:14px;
+}
+
+.leaflet-popup-content p{
+margin:6px 0;
+}
+
+
+/* Heritage tourism popup card style */
+.leaflet-popup-content-wrapper{
+border:1px solid rgba(0,0,0,0.08);
+border-radius:8px;
+box-shadow:0 8px 22px rgba(0,0,0,0.22);
+background:#ffffff;
+}
+
+.leaflet-popup-tip{
+box-shadow:0 4px 10px rgba(0,0,0,0.15);
+}
+
+/* title style for place name */
+.leaflet-popup-content b{
+display:block;
+font-size:16px;
+margin-bottom:6px;
+color:#1f2a44;
+}
+
+
+/* Improved popup card styling */
+.leaflet-popup-content-wrapper{
+border:1px solid rgba(0,0,0,0.18); /* clearer border */
+border-radius:8px;
+box-shadow:0 8px 22px rgba(0,0,0,0.22);
+background:#ffffff;
+}
+
+/* allow wider popups before becoming tall */
+.leaflet-popup{
+max-width:480px;
+}
+
+/* title behaviour: keep on one line if possible */
+.leaflet-popup-content b{
+display:block;
+font-size:16px;
+margin-bottom:6px;
+color:#1f2a44;
+white-space:nowrap;
+}
+
+/* description behaviour */
+.leaflet-popup-content{
+line-height:1.6;
+font-size:14px;
+max-height:260px;
+overflow-y:auto;
+}
+
+/* keep popup closer to square by allowing width expansion */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-content{
+min-width:260px;
+}
+
+
+/* popup card with colored header */
+.leaflet-popup{
+max-width:560px; /* wider popup */
+}
+
+.leaflet-popup-content-wrapper{
+border:1px solid rgba(0,0,0,0.18);
+border-radius:8px;
+box-shadow:0 8px 22px rgba(0,0,0,0.22);
+background:#ffffff;
+overflow:hidden;
+}
+
+/* header style for place name */
+.leaflet-popup-content b{
+display:block;
+font-size:16px;
+margin:-12px -12px 8px -12px;
+padding:10px 12px;
+background:#2c7be5;
+color:white;
+border-top-left-radius:8px;
+border-top-right-radius:8px;
+white-space:nowrap;
+}
+
+/* description styling */
+.leaflet-popup-content{
+line-height:1.6;
+font-size:14px;
+}
+
+/* remove any scrollbars if previously applied */
+.leaflet-popup-content{
+max-height:none;
+overflow:visible;
+}
+
+
+/* Responsive popup sizing */
+.leaflet-popup{
+max-width:720px;
+}
+
+.leaflet-popup-content-wrapper{
+min-width:260px;
+border:1px solid rgba(0,0,0,0.18);
+border-radius:8px;
+box-shadow:0 8px 22px rgba(0,0,0,0.22);
+background:#ffffff;
+overflow:hidden;
+}
+
+/* header style */
+.leaflet-popup-content b{
+display:block;
+font-size:16px;
+margin:-12px -12px 8px -12px;
+padding:10px 12px;
+background:#2c7be5;
+color:white;
+border-top-left-radius:8px;
+border-top-right-radius:8px;
+
+/* allow 1–2 lines max */
+white-space:normal;
+line-height:1.25;
+max-width:680px;
+}
+
+/* description text */
+.leaflet-popup-content{
+line-height:1.6;
+font-size:14px;
+}
+
+/* remove any scrollbars */
+.leaflet-popup-content{
+max-height:none;
+overflow:visible;
+}
+
+</style>
+
+
+<style>
+/* Wider popup */
+.leaflet-popup-content-wrapper{
+max-width:460px !important;
+}
+
+/* Better spacing */
+.leaflet-popup-content{
+line-height:1.7;
+font-size:14.5px;
+padding:14px 16px;
+}
+
+/* Title styling */
+.pondy-title{
+font-size:16px;
+font-weight:600;
+color:#2c3e50;
+margin-bottom:6px;
+}
+
+/* Close button styling */
+.leaflet-popup-close-button{
+top:12px !important;
+right:12px !important;
+background:#ffffff !important;
+color:#2c3e50 !important;
+border-radius:50%;
+width:26px;
+height:26px;
+display:flex;
+align-items:center;
+justify-content:center;
+box-shadow:0 2px 6px rgba(0,0,0,0.2);
+}
+</style>
+
+</head>
+
+<body>
+
+<button id="collapseBtn">⇦</button>
+
+<div id="container">
+
+<div id="sidebar">
+
+<h2 style="margin-top:40px;">Pondicherry Guide</h2>
+
+<div class="filters">
+<button onclick="showCat('All')">All</button>
+<button onclick="showCat('Sightseeing Enroute')">Sightseeing Enroute</button>
+<button onclick="showCat('Pondicherry')">Pondicherry</button>
+<button onclick="showCat('Sightseeing near Pondicherry')">Sightseeing near Pondicherry</button>
+</div>
+
+<div id="listContainer"><div id="list"></div></div>
+
+</div>
+
+<div id="resizer"></div>
+
+<div id="map"></div>
+
+</div>
+
+<script>
+
+const places = [{"name": "Cholamandal Artists’ Village", "cat": "Sightseeing Enroute", "lat": 12.9251991875747, "lon": 80.2528311248686, "desc": "Cholamandal Artists’ Village, established in 1966 near Chennai by the Madras Movement artists led by K. C. S. Paniker, is one of India’s largest self-sustaining artist communities. Spread across about 8 acres, it houses studios, galleries, and living spaces where painters and sculptors created modern Indian art. The village helped shape post-independence artistic identity through cooperative work and exhibitions. Visitors should explore its galleries to understand contemporary South Indian art and artist-led cultural initiatives.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.9251991875747,80.2528311248686"}, {"name": "Dakshinachitra", "cat": "Sightseeing Enroute", "lat": 12.8234662868807, "lon": 80.2418047746643, "desc": "Dakshinachitra is a living history museum located on the East Coast Road about 25 kilometers south of Chennai. Opened in 1996, the 10-acre complex preserves traditional houses relocated from Tamil Nadu, Kerala, Karnataka, and Andhra Pradesh. Craftspeople demonstrate weaving, pottery, and folk arts representing South Indian cultural traditions. Educational exhibits interpret architecture, domestic life, and regional customs. Visitors should spend time exploring the recreated heritage streets and experiencing traditional cuisine served at the museum café.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.8234662868807,80.2418047746643"}, {"name": "Crocodile Bank", "cat": "Sightseeing Enroute", "lat": 12.7435196991972, "lon": 80.2385340920958, "desc": "The Madras Crocodile Bank Trust and Centre for Herpetology was founded in 1976 by herpetologist Romulus Whitaker near Chennai. The conservation park houses more than 2,000 reptiles, including mugger, saltwater, and gharial crocodiles. Breeding programs support endangered reptile conservation and public education about wildlife ecology. Located along the East Coast Road, the facility also protects turtles and snakes. Visitors should observe these species to understand reptile conservation and coastal biodiversity in India.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.7435196991972,80.2385340920958"}, {"name": "Mahabalipuram ", "cat": "Sightseeing Enroute", "lat": 12.6167228502699, "lon": 80.1992708571956, "desc": "Mahabalipuram, also called Mamallapuram, is a coastal heritage town on the Bay of Bengal about 60 km south of Chennai. Flourishing under the Pallava dynasty in the 7th–8th centuries, the town became a remarkable center of rock-cut architecture and maritime activity. Its monuments, now part of the Group of Monuments at Mahabalipuram, include cave temples, monolithic rathas, and the granite Shore Temple standing dramatically beside the sea. The vast open-air relief Descent of the Ganges, about 27 meters long, is among the world’s largest stone carvings.\n\nSandy beaches and weathered granite outcrops frame these monuments. Today, Mahabalipuram is also lively with stone-carving workshops, handicraft bazaars, and seaside cafés where artisans continue centuries-old sculpting traditions. A notable modern attraction is the India Seashell Museum, which houses one of India’s largest collections of marine shells and corals, displaying thousands of specimens with educational exhibits on marine biodiversity. Together, the temples, beach landscape, living crafts, and museums make Mahabalipuram an open-air cultural gallery by the sea.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.6167228502699,80.1992708571956"}, {"name": "Promenade Beach / Rock Beach", "cat": "Pondicherry", "lat": 11.9326985965363, "lon": 79.835922517742, "desc": "Stretching about 1.2 kilometers Promenade Beach, popularly called Rock Beach, forms the historic seafront of Pondicherry along the Bay of Bengal. The promenade road running beside it is today known as Goubert Avenue, but in earlier periods it carried several names reflecting the town’s changing urban history. During the French colonial era it was called Cours Chabrol, later Boulevard Est (Boulevard East), while older records also refer to the coastal fortification line as Rampart East.\n\nThe rocky shoreline was created in the late nineteenth and early twentieth centuries as stone embankments replaced the sandy coast to protect the town from erosion and strong monsoon seas. This seafront became the ceremonial façade of French Pondichéry, lined with colonial buildings, consulates, and monuments. Today, the promenade remains a historic urban space where the layered heritage of French planning and Tamil coastal life continues to meet the sea.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9326985965363,79.835922517742"}, {"name": "Kargil War Memorial", "cat": "Pondicherry", "lat": 11.9364396015926, "lon": 79.8364755256099, "desc": "The Kargil War Memorial stands along Goubert Avenue, commemorating Indian soldiers who lost their lives in the Kargil War. Inaugurated in 2000, the simple stone monument bears the names of the fallen and faces the Bay of Bengal, symbolically overlooking the city’s historic promenade. Each year on Kargil Vijay Diwas, tribute ceremonies are held here. Set within Puducherry’s public seafront, the memorial quietly links national remembrance with the everyday life of the coastal city.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9364396015926,79.8364755256099"}, {"name": "Sri Aurobindo Ashram Exhibition House", "cat": "Pondicherry", "lat": 11.9336044188475, "lon": 79.8359669174286, "desc": "The Sri Aurobindo Ashram Exhibition House was inaugurated in February 1956 by Mirra Alfassa of the Sri Aurobindo Ashram. Its first program presented a textile and embroidery exhibition, followed later that year by a photography exhibition. The venue was created to showcase artistic expression inspired by the spiritual philosophy of Sri Aurobindo. Through exhibitions, lectures, and workshops, the space explores art as a path toward aesthetic appreciation, inner development, and cultural renewal within the Ashram’s broader educational vision.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9336044188475,79.8359669174286"}, {"name": "Old Lighthouse", "cat": "Pondicherry", "lat": 11.9329570937847, "lon": 79.835587521083, "desc": "The Old Lighthouse stands along Goubert Avenue, marking the maritime heritage of Puducherry on the Coromandel Coast. Built by the French in 1836, the 29-meter masonry tower—distinguished by its round shaft rising from a square base—was constructed to guide ships approaching the colonial port. Before its construction, vessels relied only on a distant fire signal from the Red Hills, which proved inadequate for navigation. Responding to requests from merchants and ship captains, the project was undertaken during the tenure of Governor Saint-Simon and engineered by Louis Guerre.\n\nCompleted in just a few months at a cost of about 10,000 francs, the lighthouse stood on deep masonry foundations that stabilized it on sandy ground. When first lit in July 1836, its beacon was visible nearly 15 miles at sea. Later upgrades introduced electric lighting in 1913 and a stronger lamp in 1931. The lighthouse served navigation for more than a century until a modern structure replaced it in 1979, leaving the original tower as a notable colonial-era landmark along Puducherry’s waterfront.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9329570937847,79.835587521083"}, {"name": "Mahatma Gandhi Statue", "cat": "Pondicherry", "lat": 11.932573214128, "lon": 79.8359353600797, "desc": "The Mahatma Gandhi Statue stands prominently on Goubert Avenue, overlooking the Bay of Bengal. Inaugurated on 26 January 1965, the 4-meter statue of Mahatma Gandhi was created by sculptor Debi Prasad Roy Choudhury of the Madras School of Arts and Crafts. The monument depicts Gandhi holding his walking stick, symbolizing his leadership during India’s freedom struggle. Surrounding the statue are eight intricately carved monolithic granite pillars brought from Gingee Fort, believed to date back several centuries.\n\nLocal tradition also speaks of a sealed underground passage beneath the monument once thought to lead toward Gingee Fort. Today the statue remains one of Puducherry’s most recognizable civic landmarks along the historic promenade.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.932573214128,79.8359353600797"}, {"name": "Le Café", "cat": "Pondicherry", "lat": 11.9315609246942, "lon": 79.8357545947054, "desc": "Le Cafe, Beach road The building is the oldest post office building in the city and appears in Pondicherry's 1793 Town map when it was used as the Pondicherry's harbour office during the French period. Prior to that, approximately in 1790', the structure served as a new custom house. This structure represents a bridge between Pondicherry's past and present, due to its sea front location and the numerous transformations it underwent over the years. Today Le Cafe is one of the only 24 x 7 cafe's in Pondicherry.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9315609246942,79.8357545947054"}, {"name": "French War Memorial", "cat": "Pondicherry", "lat": 11.931887938756, "lon": 79.8355482575529, "desc": "The French War Memorial stands along Goubert Avenue, commemorating soldiers from French India who died during World War I. Built in 1938, the memorial features four white columns and a life-size statue of a soldier leaning on his rifle, set within a small landscaped garden facing the Bay of Bengal. An inscription on the monument reads “Aux combattants des Indes Françaises morts pour la patrie, 1914–1918,” honoring those who fought and died for France.\n\nThe First World War was one of the deadliest conflicts in history, with millions of casualties worldwide, including thousands of Indian soldiers. Each year on Bastille Day, the memorial is illuminated during tribute ceremonies, reflecting Puducherry’s enduring connection to its French colonial past.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.931887938756,79.8355482575529"}, {"name": "Dr. B. R. Ambedkar Manimandapam", "cat": "Pondicherry", "lat": 11.9290698429276, "lon": 79.835114354794, "desc": "The Dr. B. R. Ambedkar Manimandapam commemorates B. R. Ambedkar, a renowned jurist, social reformer, and champion of equality. Located near the Tourist Information Bureau in Puducherry, the memorial extends beyond a simple statue. The spacious complex includes exhibits explaining Ambedkar’s decisive role in drafting the Constitution of India, along with a library and research center that document his life, writings, and reform movements.\n\nThrough educational programs and public discussions, the site highlights Ambedkar’s lifelong struggle for social justice, democratic rights, and equality before law. The memorial thus serves both as a place of tribute and as a center for learning about India’s constitutional foundations and modern social reform.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9290698429276,79.835114354794"}, {"name": "Dupleix Statue", "cat": "Pondicherry", "lat": 11.9256746998887, "lon": 79.8342691075756, "desc": "The statue of Joseph François Dupleix stands near Goubert Avenue, overlooking the Bay of Bengal and recalling an important chapter in the history of French India. Dupleix governed from 1742 to 1754 and transformed Puducherry into the political center of French influence in South India.\n\nEarlier European companies had mainly focused on trade along India’s coasts. Dupleix, however, recognized the political opportunities created by regional conflicts and began forming alliances with Indian rulers, supporting rival claimants in local succession struggles to expand French influence. These strategies helped trigger the Carnatic Wars, during which the British East India Company adopted similar methods that later shaped the course of colonial expansion in India.\n\nColonial administration also depended on local intermediaries known as dubashes. The most famous was Ananda Ranga Pillai, whose detailed diaries provide a vivid record of Dupleix’s era and eighteenth-century Pondicherry.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9256746998887,79.8342691075756"}, {"name": "Sri Aurobindo Handmade Paper Factory", "cat": "Pondicherry", "lat": 11.9405611435774, "lon": 79.8335554932132, "desc": "The Sri Aurobindo Handmade Paper Factory began operations in 1942 as a small handmade paper unit associated with the Sri Aurobindo Ashram. Using cotton rags and recycled fibers rather than wood pulp, artisans create paper through traditional hand-processing techniques. Visitors can observe stages such as pulp preparation, sheet formation, pressing, and drying. Over time the workshop expanded to produce notebooks, stationery, lampshades, and decorative craft items. The factory reflects the ashram’s emphasis on sustainable production, skilled craftsmanship, and environmentally responsible small-scale industry.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9405611435774,79.8335554932132"}, {"name": "Sri Aurobindo Ashram", "cat": "Pondicherry", "lat": 11.9361294097145, "lon": 79.8341195152565, "desc": "The Sri Aurobindo Ashram was established in 1926 by Sri Aurobindo and his spiritual collaborator Mirra Alfassa. Before turning to spiritual work, Sri Aurobindo was an influential figure in India’s early freedom movement, advocating independence and inspiring nationalist thought. After moving to Puducherry in 1910, he gradually developed the philosophy of Integral Yoga, which seeks the transformation of human consciousness through spiritual practice and daily work.\n\nThe ashram later grew into an international community dedicated to meditation, education, and cultural activities. Its central courtyard contains the samadhi of both founders, a place of quiet reflection visited by thousands each year. Educational initiatives connected with the ashram, including the Sri Aurobindo International Centre of Education, have influenced alternative learning approaches emphasizing creativity, self-discovery, and holistic development. Today the ashram remains one of Puducherry’s most significant spiritual and cultural landmarks.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9361294097145,79.8341195152565"}, {"name": "Arulmigu Manakula Vinayagar Temple", "cat": "Pondicherry", "lat": 11.9357869247353, "lon": 79.8336727693317, "desc": "The Arulmigu Manakula Vinayagar Temple is one of the oldest and most revered temples in Puducherry, dedicated to Ganesha. Historical records indicate that worship existed here for centuries, even during the period of French colonial rule. The temple is known for its colorful gopuram decorated with sculpted deities and mythological scenes. Traditionally, a trained temple elephant greeted visitors with blessings at the entrance. Located close to the Sri Aurobindo Ashram, the temple continues as a vibrant center of daily worship and local devotion.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9357869247353,79.8336727693317"}, {"name": "Bharathi Park", "cat": "Pondicherry", "lat": 11.9330308535525, "lon": 79.8341933349908, "desc": "Bharathi Park lies at the heart of Puducherry’s French Quarter, forming a green square within the town’s colonial urban grid. The park occupies the former site of Fort Louis, built in the late seventeenth century under Louis XIV. After the fort was destroyed during Anglo-French conflicts in the eighteenth century, the open ground was gradually converted into a civic garden.\n\nAt its center stands the elegant Aayi Mandapam, completed in 1863 during the reign of Napoleon III. Designed as a commemorative water pavilion, it celebrates a local legend of Aayi, a courtesan who is believed to have built a reservoir that supplied drinking water to the town through canals. Marble plaques with Latin inscriptions recall this story.\n\nSurrounded by institutions such as the Legislative Assembly and Raj Nivas, the park today reflects Puducherry’s layered urban history—where colonial planning, civic space, and symbolic monuments intersect within the city’s linguistic and cultural landscape.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9330308535525,79.8341933349908"}, {"name": "Pondicherry Museum", "cat": "Pondicherry", "lat": 11.9344952276715, "lon": 79.8348710259634, "desc": "Pondicherry Museum preserves archaeological artifacts and colonial-period objects illustrating regional history. Collections include Chola and Pallava bronze sculptures, Roman trade amphora fragments discovered at nearby Arikamedu, and furniture from French administrative buildings. The museum building itself dates to the eighteenth century. Exhibits demonstrate maritime trade links between South India and the Mediterranean nearly two thousand years ago. Visitors should explore the galleries to understand Puducherry’s layered cultural and archaeological past.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9344952276715,79.8348710259634"}, {"name": "Alliance Française de Pondichéry", "cat": "Pondicherry", "lat": 11.9257904356573, "lon": 79.8322083493389, "desc": "Founded in 1889, the Alliance Française de Pondichéry is the oldest Alliance Française in India and among the earliest in the global network established after the Paris headquarters (1883). Located on Rue Suffren in the historic French quarter, it has long served as a linguistic and cultural bridge between India and France. Initially mobilizing around 370 members and multiple committees across French India, the institution promoted French language education during the colonial era and beyond. Today, it hosts language courses, cultural events, and a francophone library, organizing over a hundred cultural activities annually. For scholars of linguistic landscape, the Alliance represents a living site where French signage, pedagogy, and cultural exchange continue to shape Puducherry’s multilingual urban identity.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9257904356573,79.8322083493389"}, {"name": "Eglise de Notre Dame des Anges", "cat": "Pondicherry", "lat": 11.9300122855608, "lon": 79.8345549256743, "desc": "The Église de Notre Dame des Anges, also known as Our Lady of Angels Church, stands near the seafront in Puducherry’s historic White Town. Often called the White Chapel or Kaps Koil, it is the fourth-oldest church in the city and a notable example of Franco-Indian religious heritage. The present structure was completed in 1855 during the reign of Napoleon III and designed by engineer Louis Guerre.\n\nThe church reflects Greco-Roman architectural influences, inspired partly by chapels in Paris and the Sanctuary of Our Lady of Lourdes. Its symmetrical façade, twin bell towers, and preserved clock remain prominent features. Originally painted entirely white using limestone mixed with egg whites, the building later acquired its pastel tones. Historically, several earlier churches stood on this site, some destroyed during Anglo-French conflicts.\n\nToday the church is distinctive for conducting Mass in Tamil, English, and French, reflecting Puducherry’s layered linguistic landscape and multicultural religious life.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9300122855608,79.8345549256743"}, {"name": "Basilica of the Sacred Heart of Jesus", "cat": "Pondicherry", "lat": 11.9260785622154, "lon": 79.8269706519006, "desc": "The Basilica of the Sacred Heart of Jesus was constructed in 1908 by French missionaries and granted basilica status by the Vatican in 2011. Designed in Neo-Gothic architectural style, the church features pointed arches, stained glass panels, and tall spires. Biblical scenes appear in more than twenty colored glass windows. Located near Puducherry Railway Station, it attracts thousands of worshippers each year. Visitors should see the church for its architecture and religious significance.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9260785622154,79.8269706519006"}, {"name": "Pondy Marinaa", "cat": "Pondicherry", "lat": 11.9129900313544, "lon": 79.8296962546633, "desc": "Pondy Marinaa is a developed beachfront recreation area located south of central Puducherry. Designed as a leisure promenade, it includes landscaped seating zones, food kiosks, and open areas for public gatherings. The beach stretches along the Bay of Bengal and attracts evening visitors seeking sea views and coastal breezes. Local events and cultural activities occasionally take place nearby. Visitors should walk along this shoreline to experience contemporary seaside recreation in Puducherry.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9129900313544,79.8296962546633"}, {"name": "Immaculate Conception Cathedral", "cat": "Pondicherry", "lat": 11.9330379742044, "lon": 79.8302418088908, "desc": "Immaculate Conception Cathedral, locally called Samba Kovil, traces its origins to a church built by Jesuit missionaries in 1692. The present structure was completed in 1791 after several earlier buildings were destroyed during colonial conflicts. Its white façade and symmetrical towers reflect European church design adapted to South India. The cathedral remains the seat of the Roman Catholic Archdiocese of Pondicherry and Cuddalore. Visitors should see this historic church representing centuries of Christian presence in the region.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9330379742044,79.8302418088908"}, {"name": "Pondicherry Botanical Garden", "cat": "Pondicherry", "lat": 11.9304165994278, "lon": 79.8228175445959, "desc": "Pondicherry Botanical Garden was established in 1826 by French colonial administrators to study tropical plants. The garden covers about 22 acres and includes thematic plant sections, fountains, and tree-lined avenues. More than 1,500 plant species grow here, including rare medicinal and ornamental varieties. A small toy train operates within the grounds for visitors. The garden remains an important urban green space. Visitors should explore it to observe plant diversity and colonial botanical research history.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9304165994278,79.8228175445959"}, {"name": "Arts and Crafts Village", "cat": "Pondicherry", "lat": 11.9022232548217, "lon": 79.8122644254106, "desc": "Arts and Crafts Village near Puducherry showcases traditional handicrafts and rural artisan skills from Tamil Nadu. Workshops demonstrate pottery, weaving, wood carving, and terracotta production techniques passed through generations. Visitors can observe artisans shaping clay, spinning yarn, and carving decorative objects using manual tools. The village encourages preservation of regional crafts and provides economic opportunities for artisans. Cultural exhibitions and craft markets are occasionally organized. Visitors should explore it to understand traditional craftsmanship and rural livelihoods.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9022232548217,79.8122644254106"}, {"name": "Wills Boat House", "cat": "Pondicherry", "lat": 11.8980117211762, "lon": 79.8187954039947, "desc": "Wills Boat House is a recreational boating facility located near backwater channels outside Puducherry city. Paddle boats and small motorboats allow visitors to explore calm waterways surrounded by vegetation and rural landscapes. The area supports small-scale tourism focused on relaxed outdoor activity. Seasonal water levels influence boating routes and bird sightings. Such boat houses reflect the region’s connection with inland waterways. Visitors should experience the quiet scenery and observe everyday life along these waterways.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.8980117211762,79.8187954039947"}, {"name": "Eden Beach (Blue Flag Certified)", "cat": "Pondicherry", "lat": 11.8814510524851, "lon": 79.8242187317387, "desc": "Eden Beach near Puducherry received international Blue Flag certification in 2021, recognizing strict environmental standards for water quality, safety, and coastal management. Facilities include lifeguard stations, accessible walkways, waste-management systems, and regulated swimming areas. Located south of the city, the beach represents an effort to promote sustainable coastal tourism along India’s eastern shoreline. Educational signboards explain marine ecology and conservation. Visitors should explore this example of responsible beach management.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.8814510524851,79.8242187317387"}, {"name": "Chunnambar Boat House (Paradise island)", "cat": "Pondicherry", "lat": 11.8838846912388, "lon": 79.8006810048311, "desc": "Chunnambar Boat House lies about 8 kilometers south of Puducherry where the Chunnambar River meets the Bay of Bengal. Operated by the tourism department, the facility provides ferry services across backwaters to Paradise Beach on a sandy barrier island. Boat rides pass mangrove patches and estuarine landscapes. The area demonstrates how rivers shape coastal ecosystems. Visitors should take the short boat journey to observe the meeting of river and sea environments.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.8838846912388,79.8006810048311"}, {"name": "Pondy Ocean Park", "cat": "Pondicherry", "lat": 11.8740337610266, "lon": 79.7968295586692, "desc": "Pondy Ocean Park is a water-based recreation park located along the East Coast Road near Puducherry. The park includes swimming pools, water slides, artificial wave areas, and play zones designed for family visitors. Such recreational parks represent the growth of leisure tourism along the Coromandel Coast. Facilities are designed with safety supervision and controlled water circulation systems. Visitors interested in modern entertainment infrastructure may explore this park for a different perspective of tourism.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.8740337610266,79.7968295586692"}, {"name": "Sandunes Beach", "cat": "Pondicherry", "lat": 11.8717118023778, "lon": 79.8201272894167, "desc": "Sandunes Beach lies along the East Coast Road north of Puducherry and is known for its natural sand formations shaped by coastal winds. The relatively quiet shoreline contrasts with the busy city promenade. Fishing boats and small coastal settlements operate nearby, reflecting traditional livelihoods along the Coromandel Coast. Seasonal monsoon waves reshape the dunes and shoreline patterns each year. Visitors should walk here to observe coastal geomorphology and everyday fishing community activity.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.8717118023778,79.8201272894167"}, {"name": "Ousteri Lake (Osudu Lake)", "cat": "Pondicherry", "lat": 11.9416885716096, "lon": 79.7463411566946, "desc": "Ousteri Lake, also called Osudu Lake, is a large freshwater wetland about 10 kilometers from Puducherry. Covering roughly 390 hectares, it supports migratory birds including pelicans, painted storks, and open-bill storks. The wetland has been declared a wildlife sanctuary due to its ecological importance. Seasonal water levels influence fish populations and aquatic plants. The lake forms part of a regional biodiversity corridor. Visitors interested in birdwatching and wetlands should observe this protected ecosystem.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.9416885716096,79.7463411566946"}, {"name": "Matrimandir in Auroville", "cat": "Pondicherry", "lat": 12.0038343610295, "lon": 79.8011026258938, "desc": "Matrimandir is the central meditation structure of Auroville, an international township founded in 1968. The golden spherical building rises about 30 meters high within landscaped gardens called the Peace Area. Inside, a silent white marble chamber holds a crystal globe used during meditation sessions. The structure symbolizes human unity and collective spiritual exploration envisioned by The Mother. Access is carefully regulated for quiet contemplation. Visitors should view it to understand Auroville’s unique philosophy.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.0038343610295,79.8011026258938"}, {"name": "Auroville Bamboo Centre", "cat": "Pondicherry", "lat": 12.0129775255706, "lon": 79.8012437229394, "desc": "Auroville Bamboo Centre promotes research and training in bamboo construction and handicrafts. Located within the Auroville township, the center demonstrates sustainable uses of bamboo as a renewable building material. Workshops teach techniques for furniture making, structural design, and craft production using locally available species. Bamboo grows rapidly and is valued as an environmentally responsible resource. The center collaborates with architects and artisans. Visitors should explore it to learn about sustainable materials and eco-design innovation.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.0129775255706,79.8012437229394"}, {"name": "SVARAM - Musical Instruments and Research", "cat": "Pondicherry", "lat": 12.0149461353521, "lon": 79.8013543950236, "desc": "SVARAM is an experimental center in Auroville dedicated to sound research and musical instrument creation. Founded in the early 2000s, it designs instruments using bamboo, metal, stone, and recycled materials. The Sound Garden allows visitors to interact with large outdoor instruments producing natural tones. Workshops explore acoustics, vibration, and traditional music cultures. SVARAM combines art, science, and education in one space. Visitors should experience this interactive environment to understand sound as a universal cultural expression.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.0149461353521,79.8013543950236"}, {"name": "Panchavatee Hanuman Temple", "cat": "Sightseeing near Pondicherry", "lat": 12.0098920062618, "lon": 79.7723457934633, "desc": "Panchavatee Hanuman Temple near Puducherry is dedicated to Lord Hanuman, a central figure in the Ramayana epic. The temple features a tall Hanuman statue visible from surrounding roads and gardens planted with sacred trees mentioned in Hindu texts. Devotees visit regularly for prayer, especially on Tuesdays and Saturdays traditionally associated with Hanuman worship. The complex also includes meditation spaces and shrines. Visitors should observe how epic mythology continues to shape contemporary religious practice.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.0098920062618,79.7723457934633"}, {"name": "Thillai Nataraja Temple, Chidambaram", "cat": "Sightseeing near Pondicherry", "lat": 11.3993042842705, "lon": 79.6935187456014, "desc": "Thillai Nataraja Temple in Chidambaram is dedicated to Lord Shiva as Nataraja, the cosmic dancer. The temple complex covers about 40 acres and includes four towering gopurams rising roughly 40 meters. Historical inscriptions date parts of the structure to the Chola dynasty between the 10th and 13th centuries. The temple is famous for the “Chidambara Rahasyam,” a symbolic representation of divine presence. Visitors should see this sacred site illustrating South Indian temple architecture and Shaivite philosophy.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.3993042842705,79.6935187456014"}, {"name": "Pichavaram Mangrove Forest, Chidambaram", "cat": "Sightseeing near Pondicherry", "lat": 11.4319059655308, "lon": 79.7810480975623, "desc": "Pichavaram Mangrove Forest lies between the Vellar and Coleroon estuaries near Chidambaram. Covering more than 1,100 hectares, it is one of India’s largest mangrove ecosystems. Narrow waterways pass through dense mangrove trees that support fish nurseries, migratory birds, and coastal biodiversity. Small boats allow visitors to navigate the channels. Mangroves also help reduce coastal erosion and storm damage. Visitors should explore this unique wetland environment to understand coastal ecology and conservation.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.4319059655308,79.7810480975623"}, {"name": "Gingee Fort (Senji Fort)", "cat": "Sightseeing near Pondicherry", "lat": 12.2502567358812, "lon": 79.3948440230528, "desc": "Gingee Fort, also called Senji Fort, is a massive hill fortress complex about 160 kilometers from Chennai. Built and expanded between the 13th and 17th centuries by various dynasties, it includes three fortified hills rising nearly 240 meters. Stone walls, granaries, temples, and watchtowers remain within the complex. European travelers once called it the “Troy of the East.” Visitors should climb its paths to understand historical military architecture and strategic hill fort design.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.2502567358812,79.3948440230528"}, {"name": "Arulmigu Arunachaleswarar Temple, Tiruvannamalai", "cat": "Sightseeing near Pondicherry", "lat": 12.2316689935642, "lon": 79.0677609767358, "desc": "Arulmigu Arunachaleswarar Temple in Tiruvannamalai is dedicated to Lord Shiva and associated with the sacred Arunachala hill. The temple complex covers around 25 acres and features gopurams rising up to 66 meters. Major expansions occurred under the Chola and Vijayanagara dynasties between the 9th and 16th centuries. Thousands participate in the monthly Girivalam pilgrimage walking a 14-kilometer path around the hill. Visitors should witness this major Shaivite pilgrimage center and temple architecture.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.2316689935642,79.0677609767358"}, {"name": "Mamallapuram (Mahabalipuram)", "cat": "Sightseeing near Pondicherry", "lat": 12.6164703517717, "lon": 80.1993327514653, "desc": "Mamallapuram, also known as Mahabalipuram, is a UNESCO World Heritage Site on the Coromandel Coast. Developed by the Pallava dynasty during the 7th and 8th centuries, it contains rock-cut caves, monolithic temples, and the Shore Temple facing the Bay of Bengal. The famous “Descent of the Ganges” bas-relief measures about 27 meters long. The site illustrates early Dravidian temple architecture carved from granite. Visitors should explore it to understand classical South Indian sculpture and coastal heritage.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.6164703517717,80.1993327514653"}, {"name": "Sadras", "cat": "Sightseeing near Pondicherry", "lat": 12.5286514309339, "lon": 80.1654285321079, "desc": "Sadras, historically called Sadurangapattinam, was a Dutch trading settlement along the Coromandel Coast during the 17th and 18th centuries. The remaining Dutch fort complex includes warehouses, defensive walls, and a cemetery containing intricately carved tombs of Dutch officials. Archaeological conservation has preserved sections of the fort near Kalpakkam. The site reflects European maritime trade networks that once linked India with Southeast Asia and Europe. Visitors should explore Sadras to observe colonial-era coastal trading history.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.5286514309339,80.1654285321079"}, {"name": "Kancheepuram", "cat": "Sightseeing near Pondicherry", "lat": 12.8372004828136, "lon": 79.7041685687485, "desc": "Kancheepuram, located about 75 kilometers from Chennai, is one of India’s oldest continuously inhabited cities. Known historically as a major center of learning and religion, it flourished under Pallava rule between the 4th and 9th centuries. The city contains numerous temples including Ekambareswarar and Kamakshi Amman. Kancheepuram is also famous for silk weaving traditions producing ceremonial sarees. Visitors should explore this historic city to understand South Indian temple architecture and traditional textile heritage.", "dir": "https://www.google.com/maps/dir/?api=1&destination=12.8372004828136,79.7041685687485"}, {"name": "Kumbakonam", "cat": "Sightseeing near Pondicherry", "lat": 10.9601897596412, "lon": 79.3845209361772, "desc": "Kumbakonam in Tamil Nadu is a historic temple town located between the Cauvery and Arasalar rivers. The region contains more than 180 temples, many built or expanded during the Chola dynasty around the 9th to 12th centuries. Every 12 years the Mahamaham festival draws large pilgrimages to the Mahamaham tank. The town is also known for brass utensil production and traditional South Indian filter coffee culture. Visitors should explore its dense concentration of temples and ritual traditions.", "dir": "https://www.google.com/maps/dir/?api=1&destination=10.9601897596412,79.3845209361772"}, {"name": "Nachiyar Koil (near Kumbakonam)", "cat": "Sightseeing near Pondicherry", "lat": 10.9176770995429, "lon": 79.4454714478399, "desc": "Nachiyar Koil, officially called Srinivasa Perumal Temple, lies about 10 kilometers from Kumbakonam. The temple is dedicated to Vishnu and is unusual because the goddess Nachiyar receives prominent ritual importance. Architectural features include a tall rajagopuram and stone mandapams built during medieval Chola and later Nayak periods. The temple is famous for Kal Garuda, a stone Garuda idol carried during festivals that appears to grow heavier. Visitors should observe this distinctive Vaishnavite tradition.", "dir": "https://www.google.com/maps/dir/?api=1&destination=10.9176770995429,79.4454714478399"}, {"name": "Thanjavur (Tanjore)", "cat": "Sightseeing near Pondicherry", "lat": 10.7828041169657, "lon": 79.1314602032739, "desc": "Thanjavur, historically known as Tanjore, served as the capital of the powerful Chola Empire during the 10th and 11th centuries. The city is home to the Brihadeeswarar Temple, built by Raja Raja Chola I in 1010 CE and now a UNESCO World Heritage monument. The temple’s granite vimana tower rises about 66 meters. Thanjavur is also renowned for classical paintings and bronze sculptures. Visitors should explore the city to understand Chola architecture and South Indian artistic traditions.", "dir": "https://www.google.com/maps/dir/?api=1&destination=10.7828041169657,79.1314602032739"}, {"name": "Tharangambadi (Tranquebar)", "cat": "Sightseeing near Pondicherry", "lat": 11.0250431837772, "lon": 79.8561627380577, "desc": "Tharangambadi, historically called Tranquebar, was a Danish trading colony established in 1620 on the Coromandel Coast. Fort Dansborg, built by the Danish East India Company, still stands facing the sea. The settlement later became an early center of Protestant missionary activity in India during the 18th century. Colonial houses, churches, and fort walls remain along the shoreline. Visitors should walk through the town to observe preserved Scandinavian colonial architecture in India.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.0250431837772,79.8561627380577"}, {"name": "Velankanni", "cat": "Sightseeing near Pondicherry", "lat": 10.6803053343858, "lon": 79.850113731407, "desc": "Velankanni in Tamil Nadu is home to the Basilica of Our Lady of Good Health, one of India’s most important Christian pilgrimage centers. Devotion here dates to reported Marian apparitions during the 16th century. The basilica was elevated to minor basilica status by the Vatican in 1962. Each year the ten-day annual festival in September attracts hundreds of thousands of pilgrims. Visitors should witness this major pilgrimage site reflecting shared faith traditions across communities.", "dir": "https://www.google.com/maps/dir/?api=1&destination=10.6803053343858,79.850113731407"}, {"name": "Gangaikonda Cholapuram", "cat": "Sightseeing near Pondicherry", "lat": 11.2064758568483, "lon": 79.448471912448, "desc": "Gangaikonda Cholapuram was established in the 11th century by the Chola emperor Rajendra I after his northern military campaigns. The city once served as the imperial capital of the Chola Empire. Its Brihadeeswarar-style temple features a monumental vimana tower about 55 meters high. Sculptures and inscriptions document Chola political power and temple culture. The site is now part of the UNESCO-listed Great Living Chola Temples. Visitors should explore it to understand Chola imperial architecture.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.2064758568483,79.448471912448"}, {"name": "Poompuhar", "cat": "Sightseeing near Pondicherry", "lat": 11.1432430175631, "lon": 79.8576827492165, "desc": "Poompuhar, also known as Kaveripoompattinam, was an ancient port city at the mouth of the Cauvery River. Sangam literature dating roughly between 300 BCE and 300 CE describes it as a bustling maritime trade center. Archaeological findings suggest connections with Roman and Southeast Asian merchants. Much of the ancient city was lost to coastal erosion and shifting shorelines over centuries. Visitors should explore the coastal remains and museum exhibits to understand early South Indian maritime history.", "dir": "https://www.google.com/maps/dir/?api=1&destination=11.1432430175631,79.8576827492165"}];
+
+const map = L.map('map', {zoomAnimation:true, fadeAnimation:true, markerZoomAnimation:true}).setView([11.925,79.825],14);
+window.map = map;
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+
+
+function getColor(name){
+name = name.toLowerCase();
+
+if(name.includes("temple")) return "#e67e22";      // orange
+if(name.includes("beach")) return "#3498db";       // blue
+if(name.includes("church") || name.includes("basilica") || name.includes("cathedral")) return "#8e44ad"; // purple
+if(name.includes("fort")) return "#c0392b";        // red
+if(name.includes("museum")) return "#2c3e50";      // dark
+if(name.includes("park") || name.includes("lake")) return "#27ae60"; // green
+
+return "#7f8c8d"; // default grey
+}
+
+
+function getIcon(name){
+name = name.toLowerCase();
+
+if(name.includes("temple")) return "🛕";
+if(name.includes("beach")) return "🌊";
+if(name.includes("church") || name.includes("basilica") || name.includes("cathedral")) return "⛪";
+if(name.includes("fort")) return "🏰";
+if(name.includes("museum")) return "🏛";
+if(name.includes("park") || name.includes("lake")) return "🌿";
+
+return "📍";
+}
+
+
+let markers=[];
+
+places.forEach(p=>{
+
+
+let icon = L.divIcon({
+className:'marker-icon',
+html:'<div style="background:'+getColor(p.name)+';width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:15px;">'+getIcon(p.name)+'</div>',
+iconSize:[26,26],
+bgPos:[0,0]
+});
+
+// Apply background color dynamically
+setTimeout(()=>{
+let markers = document.querySelectorAll('.marker-icon');
+markers.forEach(el=>{
+let txt = el.textContent;
+});
+},10);
+
+
+let m=L.marker([p.lat,p.lon],{icon:icon}).addTo(map);
+
+m.bindPopup("<b>"+p.name+"</b><br>"+p.desc+"<br><br><a href='"+p.dir+"' target='_blank'>Directions</a>");
+markers.push({marker:m,data:p});
+});
+
+const list=document.getElementById("list");
+
+
+function render(cat){
+list.innerHTML="";
+
+let bounds = [];
+
+markers.forEach(o=>{
+
+if(cat==="All" || o.data.cat===cat){
+
+o.marker.addTo(map);
+
+let div=document.createElement("div");
+div.className="place";
+
+let short=o.data.desc||"";
+if(short.length>160) short=short.substring(0,160)+"...";
+
+div.innerHTML="<b>"+o.data.name+"</b><div class='preview'>"+short+"</div>";
+
+div.onclick=()=>{
+map.setView([o.data.lat,o.data.lon],15);
+o.marker.openPopup();
+};
+
+list.appendChild(div);
+
+bounds.push([o.data.lat,o.data.lon]);
+
+}
+else{
+
+map.removeLayer(o.marker);
+
+}
+
+});
+
+// Auto zoom to visible markers
+if(bounds.length>0){
+let latlngs = bounds.map(b => L.latLng(b[0], b[1]));
+let boundsObj = L.latLngBounds(latlngs);
+map.fitBounds(boundsObj.pad(0.25));
+}
+
+}
+
+function showCat(cat){ render(cat); }
+render("All");
+
+/* RESIZER */
+const resizer=document.getElementById("resizer");
+const sidebar=document.getElementById("sidebar");
+
+let isResizing=false;
+
+resizer.addEventListener("mousedown",()=>{
+  isResizing=true;
+  sidebar.style.transition="none";
+  map.getContainer().style.transition="none";
+});
+
+document.addEventListener("mousemove",(e)=>{
+if(!isResizing) return;
+
+let newWidth=e.clientX;
+
+if(newWidth<220) newWidth=220;
+if(newWidth>window.innerWidth*0.7) newWidth=window.innerWidth*0.7;
+
+sidebar.style.width=newWidth+"px";
+map.invalidateSize();
+});
+
+document.addEventListener("mouseup",()=>{
+isResizing=false;
+sidebar.style.transition="width 0.18s ease";
+map.getContainer().style.transition="all 0.18s ease";
+map.invalidateSize();
+});
+
+document.addEventListener("mouseup",()=>{isResizing=false;map.invalidateSize();});
+
+/* COLLAPSE BUTTON */
+const collapseBtn=document.getElementById("collapseBtn");
+collapseBtn.addEventListener("click",()=>{
+sidebar.classList.toggle("collapsed");
+
+if(sidebar.classList.contains("collapsed")){
+  collapseBtn.innerHTML="⇨";
+}else{
+  collapseBtn.innerHTML="⇦";
+}
+
+setTimeout(()=>map.invalidateSize(),300);
+});
+
+</script>
+
+
+<div id="seaGradient"></div>
+
+<div id="mapIntroPanel">
+<h1 id="mapTitle"></h1>
+<p id="mapText"></p>
+</div>
+
+
+<script>
+(function(){
+
+const panel = document.getElementById('mapIntroPanel');
+if(!panel) return;
+
+function showPanel(){
+  panel.classList.remove('hidden');
+}
+
+function hidePanel(){
+  panel.classList.add('hidden');
+}
+
+/* Hide panel whenever a marker popup opens */
+if(window.map){
+  map.on('popupopen', hidePanel);
+}
+
+/* When any sidebar/filter button is clicked show panel again */
+document.querySelectorAll('button').forEach(btn=>{
+  btn.addEventListener('click', function(){
+    showPanel();
+  });
+});
+
+/* Ensure panel visible on load */
+showPanel();
+
+})();
+</script>
+
+
+<script>
+(function(){
+ if(!window.map) return;
+ const sea = document.getElementById('seaGradient');
+ if(!sea) return;
+
+ map.on('move', function(){
+   const center = map.getCenter();
+   const offset = (center.lng - 79.825) * 40;  // subtle horizontal drift
+   sea.style.transform = 'translateX(' + offset + 'px)';
+ });
+})();
+</script>
+
+
+<div id="mapVignette"></div>
+
+
+
+
+
+
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+  const list = document.getElementById("listContainer");
+  const filters = document.querySelector(".filters");
+  if(!list || !filters) return;
+
+  list.addEventListener("scroll", function(){
+    if(list.scrollTop > 0){
+      filters.classList.add("scrolled");
+    }else{
+      filters.classList.remove("scrolled");
+    }
+  });
+});
+</script>
+
+
+<div id="resetViewBtn">Reset to Pondicherry view</div>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+
+if(!window.map) return;
+
+/* Reset view button */
+const resetBtn = document.getElementById("resetViewBtn");
+if(resetBtn){
+resetBtn.onclick = function(){
+map.setView([11.925,79.825],14);
+};
+}
+
+});
+</script>
+
+
+<script>
+/* Make Leaflet popups draggable */
+document.addEventListener("DOMContentLoaded", function(){
+
+if(!window.map) return;
+
+map.on('popupopen', function(e){
+
+  const popupEl = e.popup.getElement();
+  if(!popupEl) return;
+
+  popupEl.style.cursor = "move";
+
+  let isDown = false;
+  let startX, startY;
+
+  popupEl.addEventListener("mousedown", function(ev){
+    isDown = true;
+    startX = ev.clientX - popupEl.offsetLeft;
+    startY = ev.clientY - popupEl.offsetTop;
+    popupEl.style.position = "absolute";
+  });
+
+  document.addEventListener("mousemove", function(ev){
+    if(!isDown) return;
+    popupEl.style.left = (ev.clientX - startX) + "px";
+    popupEl.style.top = (ev.clientY - startY) + "px";
+  });
+
+  document.addEventListener("mouseup", function(){
+    isDown = false;
+  });
+
+});
+
+});
+</script>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+
+if(!window.map) return;
+
+let activeMarker = null;
+
+map.on('popupopen', function(e){
+
+  if(activeMarker){
+    const el = activeMarker.getElement();
+    if(el) el.classList.remove("marker-active");
+  }
+
+  activeMarker = e.popup._source;
+
+  const el = activeMarker.getElement();
+  if(el){
+    el.classList.add("marker-active");
+  }
+
+});
+
+map.on('popupclose', function(){
+  if(activeMarker){
+    const el = activeMarker.getElement();
+    if(el) el.classList.remove("marker-active");
+  }
+});
+
+});
+</script>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+
+if(!window.map) return;
+
+let activeMarker = null;
+
+map.on("popupopen", function(e){
+
+  if(activeMarker && activeMarker._icon){
+    activeMarker._icon.classList.remove("marker-active","marker-ripple");
+  }
+
+  activeMarker = e.popup._source;
+
+  if(activeMarker && activeMarker._icon){
+    const el = activeMarker._icon;
+    el.classList.add("marker-ripple");
+    setTimeout(function(){
+        el.classList.remove("marker-ripple");
+        el.classList.add("marker-active");
+    },400);
+  }
+
+});
+
+map.on("popupclose", function(){
+  if(activeMarker && activeMarker._icon){
+    activeMarker._icon.classList.remove("marker-active","marker-ripple");
+  }
+});
+
+});
+</script>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+
+if(!window.map) return;
+
+map.on("popupopen", function(e){
+  // small upward pan so marker is visible below popup
+  setTimeout(function(){
+    map.panBy([0,-120],{animate:true,duration:0.3});
+  },50);
+});
+
+});
+</script>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+
+if(!window.map) return;
+
+let activeMarker = null;
+
+map.on("popupopen", function(e){
+
+  // dim all markers first
+  document.querySelectorAll(".leaflet-marker-icon").forEach(function(m){
+      m.classList.add("marker-dim");
+  });
+
+  // remove dim from selected marker
+  activeMarker = e.popup._source;
+  if(activeMarker && activeMarker._icon){
+      activeMarker._icon.classList.remove("marker-dim");
+  }
+
+});
+
+map.on("popupclose", function(){
+
+  // restore all markers
+  document.querySelectorAll(".leaflet-marker-icon").forEach(function(m){
+      m.classList.remove("marker-dim");
+  });
+
+});
+
+});
+</script>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+
+if(!window.map) return;
+
+map.on("popupopen", function(){
+   const tiles = document.querySelector(".leaflet-tile-pane");
+   if(!tiles) return;
+   tiles.classList.add("map-dim-flash");
+   setTimeout(()=>tiles.classList.remove("map-dim-flash"),250);
+});
+
+});
+</script>
+
+
+<script>
+// ===== FINAL CLEAN PONDICHERRY POPUP (NO DUPLICATES) =====
+let pondyPopup = null;
+
+function showPondyPopup() {
+    if (!window.map) return;
+
+    if (pondyPopup) return;
+
+    pondyPopup = L.popup({
+        maxWidth: 420,
+        closeButton: true,
+        autoClose: false,
+        closeOnClick: false
+    })
+    .setLatLng([11.93, 79.83])
+    .setContent(`<div class="pondy-title">Puducherry</div>Puducherry, formerly Pondicherry, is a coastal settlement on the Coromandel Coast whose history spans both South Indian empires and European colonial networks. Between the 4th and 14th centuries it formed part of the Pallava, Chola, and Pandya realms, later passing under Vijayanagara and subsequent regional powers.
+
+European maritime trade reshaped the town from the 16th century onward, beginning with the Portuguese, followed by the Dutch and Danes. The French established a permanent colony in 1674 under François Martin, later expanded by Joseph François Dupleix into a fortified port town. A defining feature of colonial planning was the geometric street grid, divided by a canal separating the French Ville Blanche and Tamil quarters—an early example of spatial and linguistic segregation.
+
+Despite British occupations in the 18th century, French rule continued until 1954 (ratified in 1962). The town also sheltered Sri Aurobindo, linking it to India’s nationalist history. Today, its bilingual signage, layered toponyms, and Franco-Tamil culture make Puducherry a living landscape of historical interaction.`);
+
+    map.addLayer(pondyPopup); // SAFE
+}
+
+function clearPondyPopup() {
+    if (pondyPopup) {
+        map.removeLayer(pondyPopup);
+        pondyPopup = null;
+    }
+}
+
+// Bind ONLY to filter buttons
+window.addEventListener("load", function(){
+    setTimeout(() => {
+        document.querySelectorAll("button").forEach(btn => {
+            btn.addEventListener("click", function(){
+                const t = (btn.innerText || "").trim();
+
+                if (t === "Pondicherry") {
+                    showPondyPopup();
+                } else {
+                    clearPondyPopup();
+                }
+            });
+        });
+    }, 500);
+
+    // Initial load
+    setTimeout(showPondyPopup, 600);
+});
+</script>
+
+
+<script>
+// ===== FIX INTERACTIONS =====
+
+// Close Pondicherry popup when any marker popup opens
+map.on("popupopen", function(e){
+    if (pondyPopup && e.popup !== pondyPopup){
+        clearPondyPopup();
+    }
+});
+
+// Close ALL popups when filters change
+document.querySelectorAll("button").forEach(btn=>{
+    btn.addEventListener("click", function(){
+        if(window.map){
+            map.closePopup(); // closes marker popups
+        }
+    });
+});
+</script>
+
+</body>
+</html>
